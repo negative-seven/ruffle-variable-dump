@@ -50,6 +50,7 @@ use ruffle_render::transform::TransformStack;
 use ruffle_video::backend::VideoBackend;
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
+use std::fs;
 use std::ops::DerefMut;
 use std::rc::{Rc, Weak as RcWeak};
 use std::str::FromStr;
@@ -1442,6 +1443,36 @@ impl Player {
                 Avm1::run_frame(context);
             }
             context.update_sounds();
+        });
+
+        self.mutate_with_update_context(|context| {
+            let mut dumper = VariableDumper::new("  ");
+
+            let mut activation = Activation::from_stub(
+                context.reborrow(),
+                ActivationIdentifier::root("[Variable Dumper]"),
+            );
+
+            dumper.print_variables(
+                "Global Variables:",
+                "_global",
+                &activation.context.avm1.global_object(),
+                &mut activation,
+            );
+
+            for display_object in activation.context.stage.iter_render_list() {
+                let level = display_object.depth();
+                let object = display_object.object().coerce_to_object(&mut activation);
+                dumper.print_variables(
+                    &format!("Level #{level}:"),
+                    &format!("_level{level}"),
+                    &object,
+                    &mut activation,
+                );
+            }
+
+            fs::write("dump.log", dumper.output())
+                .expect("Could not write to variable dump log file.");
         });
 
         self.needs_render = true;
